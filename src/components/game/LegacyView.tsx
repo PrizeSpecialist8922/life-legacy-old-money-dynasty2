@@ -1,6 +1,19 @@
 import { useState } from "react";
-import { Crown, Flame, Landmark, Mail, ScrollText, Shield, Users } from "lucide-react";
-import { lifeLegacyScore, livingChildren, writeLetter, writeWill } from "../../game/legacy";
+import {
+  Crown,
+  Flame,
+  Landmark,
+  Mail,
+  ScrollText,
+  Shield,
+  Users,
+} from "lucide-react";
+import {
+  lifeLegacyScore,
+  livingChildren,
+  writeLetter,
+  writeWill,
+} from "../../game/legacy";
 import {
   ENDOWMENTS,
   acquireSeat,
@@ -20,7 +33,12 @@ import { ACTIONS_PER_YEAR, trySpendEnergy } from "../../game/engine";
 import type { Character, LogTone } from "../../game/types";
 import { formatMoney } from "../../game/util";
 
-type AnyResult = { character: Character; message: string; tone: LogTone; ok: boolean };
+type AnyResult = {
+  character: Character;
+  message: string;
+  tone: LogTone;
+  ok: boolean;
+};
 type Act = (fn: (c: Character) => AnyResult) => void;
 
 const btn =
@@ -33,7 +51,9 @@ const btnDanger =
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-0.5 text-sm font-bold">{value}</p>
     </div>
   );
@@ -44,6 +64,15 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
   const will = c.will ?? { charityPct: 0, written: false, heirId: undefined };
   const [heirPick, setHeirPick] = useState<string | undefined>(will.heirId);
   const [charity, setCharity] = useState(will.charityPct);
+  const [splitPct, setSplitPct] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const s of will.splits ?? []) init[s.relId] = `${s.pct}`;
+    return init;
+  });
+  const splitTotal = kids.reduce(
+    (s, k) => s + Number(splitPct[k.id] ?? "0"),
+    0,
+  );
   const [seatName, setSeatName] = useState("");
   const [letterText, setLetterText] = useState("");
   const [letterAge, setLetterAge] = useState(21);
@@ -66,14 +95,21 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           </h3>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">
-          What you build outlives you — if the handoff survives taxes, lawyers, and grudges.
+          What you build outlives you — if the handoff survives taxes, lawyers,
+          and grudges.
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Generation" value={`${dyn?.generation ?? 1}`} />
           <Stat label="Dynasty Score" value={`${dyn?.legacyScore ?? 0}`} />
           <Stat label="This Life (so far)" value={`+${thisLife}`} />
-          <Stat label="Family Reputation" value={`${dyn?.reputation ?? 50}/100`} />
-          <Stat label="Pedigree" value={`${Math.round(dyn?.pedigree ?? 0)}/100`} />
+          <Stat
+            label="Family Reputation"
+            value={`${dyn?.reputation ?? 50}/100`}
+          />
+          <Stat
+            label="Pedigree"
+            value={`${Math.round(dyn?.pedigree ?? 0)}/100`}
+          />
         </div>
         {dyn &&
           (dyn.officesWon > 0 ||
@@ -81,9 +117,9 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
             dyn.awards > 0 ||
             dyn.crimesGottenAwayWith > 0) && (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Across generations: {formatMoney(dyn.wealthCreated)} created · {dyn.officesWon}{" "}
-              elections won · {dyn.championships} championships · {dyn.awards} awards ·{" "}
-              {dyn.billsPassed} bills passed
+              Across generations: {formatMoney(dyn.wealthCreated)} created ·{" "}
+              {dyn.officesWon} elections won · {dyn.championships} championships
+              · {dyn.awards} awards · {dyn.billsPassed} bills passed
               {dyn.crimesGottenAwayWith > 0
                 ? ` · ${dyn.crimesGottenAwayWith} crimes never answered for`
                 : ""}
@@ -91,8 +127,8 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           )}
         {dyn?.markedBySyndicate && (
           <p className="mt-1 text-[11px] text-red-400">
-            This family is marked — an ancestor turned informant, and {dyn.markedBySyndicate}{" "}
-            remember.
+            This family is marked — an ancestor turned informant, and{" "}
+            {dyn.markedBySyndicate} remember.
           </p>
         )}
       </div>
@@ -109,7 +145,8 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
         </p>
         {kids.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">
-            No living children yet — the dynasty needs an heir before a will means much.
+            No living children yet — the dynasty needs an heir before a will
+            means much.
           </p>
         ) : (
           <div className="space-y-1.5">
@@ -128,14 +165,18 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
                   · age {k.age} · relationship {k.relationship}
                 </span>
                 {will.heirId === k.id && (
-                  <span className="ml-1 text-[10px] font-bold text-primary">CURRENT HEIR</span>
+                  <span className="ml-1 text-[10px] font-bold text-primary">
+                    CURRENT HEIR
+                  </span>
                 )}
               </button>
             ))}
           </div>
         )}
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">Charity: {charity}%</span>
+          <span className="text-[11px] text-muted-foreground">
+            Charity: {charity}%
+          </span>
           <input
             type="range"
             min={0}
@@ -149,16 +190,103 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
             (20%+ boosts family reputation at death)
           </span>
         </div>
+        {kids.length > 1 && (
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-xs font-bold">Divide the Estate</p>
+              <button
+                className={btnGhost}
+                onClick={() => {
+                  const even = Math.floor(100 / kids.length);
+                  const next: Record<string, string> = {};
+                  kids.forEach((k, i) => {
+                    next[k.id] =
+                      `${i === 0 ? 100 - even * (kids.length - 1) : even}`;
+                  });
+                  setSplitPct(next);
+                }}
+              >
+                Split Equally
+              </button>
+            </div>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              Shares must total 100%. Leave everything at 0 to give it all to
+              the heir. Shorted, resentful children contest wills; even
+              divisions build unity.
+            </p>
+            <div className="space-y-1.5">
+              {kids.map((k) => (
+                <div
+                  key={k.id}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="text-xs">
+                    {k.name}
+                    {heirPick === k.id && (
+                      <span className="ml-1 text-[10px] font-bold text-primary">
+                        HEIR
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      className="w-16 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-right text-xs text-foreground focus:outline-none"
+                      inputMode="numeric"
+                      value={splitPct[k.id] ?? "0"}
+                      onChange={(e) =>
+                        setSplitPct({
+                          ...splitPct,
+                          [k.id]: e.target.value
+                            .replace(/[^0-9]/g, "")
+                            .slice(0, 3),
+                        })
+                      }
+                    />
+                    <span className="text-[11px] text-muted-foreground">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p
+              className={`mt-1.5 text-right text-[11px] ${
+                splitTotal === 0 || splitTotal === 100
+                  ? "text-muted-foreground"
+                  : "text-red-300"
+              }`}
+            >
+              Total: {splitTotal}%{" "}
+              {splitTotal === 0
+                ? "(all to heir)"
+                : splitTotal !== 100
+                  ? "— must be 100%"
+                  : ""}
+            </p>
+          </div>
+        )}
         <button
           className={`${btn} mt-2 w-full`}
-          disabled={c.age < 18}
-          onClick={() => act((ch) => writeWill(ch, heirPick, charity))}
+          disabled={c.age < 18 || (splitTotal !== 0 && splitTotal !== 100)}
+          onClick={() =>
+            act((ch) =>
+              writeWill(
+                ch,
+                heirPick,
+                charity,
+                splitTotal === 100
+                  ? kids.map((k) => ({
+                      relId: k.id,
+                      pct: Number(splitPct[k.id] ?? "0"),
+                    }))
+                  : undefined,
+              ),
+            )
+          }
         >
           {will.written ? "Update the Will" : "Write the Will"}
         </button>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Estate tax: first $1M free, 25% to $5M, 40% above. Named heirs keep businesses; without a
-          will, executors fire-sale half of them at 70¢.
+          Estate tax: first $1M free, 25% to $5M, 40% above. Named heirs keep
+          businesses; without a will, executors fire-sale half of them at 70¢.
         </p>
       </div>
 
@@ -166,25 +294,32 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
       <div className="glass rounded-2xl p-4">
         <div className="mb-1 flex items-center gap-2">
           <Landmark className="h-5 w-5 text-primary" />
-          <h3 className="text-base font-bold">{seat ? seat.name : "The Family Seat"}</h3>
+          <h3 className="text-base font-bold">
+            {seat ? seat.name : "The Family Seat"}
+          </h3>
         </div>
         {!seat ? (
           dyn2?.lostSeat ? (
             <>
               <p className="mb-2 text-xs text-muted-foreground">
-                The family lost {dyn2.lostSeat.name}. Strangers live there. The game remembers the
-                address — and so does everyone who matters.
+                The family lost {dyn2.lostSeat.name}. Strangers live there. The
+                game remembers the address — and so does everyone who matters.
               </p>
-              <button className={btn} onClick={() => act((ch) => buyBackSeat(ch, trySpendEnergy))}>
-                Buy It Back (~{formatMoney(Math.round(dyn2.lostSeat.price * 1.5))}, 1⚡) — the great
-                unfinished business
+              <button
+                className={btn}
+                onClick={() => act((ch) => buyBackSeat(ch, trySpendEnergy))}
+              >
+                Buy It Back (~
+                {formatMoney(Math.round(dyn2.lostSeat.price * 1.5))}, 1⚡) — the
+                great unfinished business
               </button>
             </>
           ) : (
             <>
               <p className="mb-2 text-xs text-muted-foreground">
-                Not an asset — an anchor. Weddings, funerals, portraits, and the reading of wills
-                happen at a Seat. $2,500,000 and it never stops costing you, which is the point.
+                Not an asset — an anchor. Weddings, funerals, portraits, and the
+                reading of wills happen at a Seat. $2,500,000 and it never stops
+                costing you, which is the point.
               </p>
               <div className="flex flex-wrap items-center gap-1.5">
                 <input
@@ -197,7 +332,9 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
                   className={btn}
                   disabled={c.money < 2500000}
                   onClick={() =>
-                    act((ch) => acquireSeat(ch, seatName || undefined, trySpendEnergy))
+                    act((ch) =>
+                      acquireSeat(ch, seatName || undefined, trySpendEnergy),
+                    )
                   }
                 >
                   Acquire the Seat (1⚡)
@@ -208,18 +345,29 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
         ) : (
           <>
             <p className="mb-2 text-xs text-muted-foreground">
-              Held {seat.yearsHeld} year(s) · prestige {seat.housePrestige} · upkeep{" "}
+              Held {seat.yearsHeld} year(s) · prestige {seat.housePrestige} ·
+              upkeep{" "}
               {formatMoney(
                 Math.round(
                   seat.value *
                     0.015 *
-                    (seat.closedWings === 0 ? 1 : seat.closedWings === 1 ? 0.5 : 0.3),
+                    (seat.closedWings === 0
+                      ? 1
+                      : seat.closedWings === 1
+                        ? 0.5
+                        : 0.3),
                 ),
               )}
               /yr
-              {seat.upkeepOwedYears > 0 ? ` · ⚠ ${seat.upkeepOwedYears} yr unpaid` : ""}
-              {seat.closedWings > 0 ? ` · ${seat.closedWings} wing(s) closed` : ""}
-              {seat.paintingsSold > 0 ? ` · ${seat.paintingsSold} painting(s) gone` : ""}
+              {seat.upkeepOwedYears > 0
+                ? ` · ⚠ ${seat.upkeepOwedYears} yr unpaid`
+                : ""}
+              {seat.closedWings > 0
+                ? ` · ${seat.closedWings} wing(s) closed`
+                : ""}
+              {seat.paintingsSold > 0
+                ? ` · ${seat.paintingsSold} painting(s) gone`
+                : ""}
             </p>
             <div className="flex flex-wrap gap-1.5">
               <select
@@ -242,7 +390,9 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
               <button
                 className={btn}
                 onClick={() =>
-                  act((ch) => commissionPortrait(ch, portraitEmphasis, 1, trySpendEnergy))
+                  act((ch) =>
+                    commissionPortrait(ch, portraitEmphasis, 1, trySpendEnergy),
+                  )
                 }
               >
                 Commission Portrait ($150k, 1⚡)
@@ -273,7 +423,10 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
               <p className="mt-2 text-[11px] text-muted-foreground">
                 The hall:{" "}
                 {seat.portraits
-                  .map((p2) => `Gen ${p2.generation} — ${p2.name} (${p2.emphasis})`)
+                  .map(
+                    (p2) =>
+                      `Gen ${p2.generation} — ${p2.name} (${p2.emphasis})`,
+                  )
                   .join(" · ")}
               </p>
             )}
@@ -290,12 +443,15 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
         {!dyn2?.trust ? (
           <>
             <p className="mb-2 text-xs text-muted-foreground">
-              Lock 80% of your cash behind rules your heirs must live under. The corpus survives
-              estate tax, lawsuits, and their worst instincts — they draw an allowance and answer to
-              your dead hand. Age 40+, $2M+ cash.
+              Lock 80% of your cash behind rules your heirs must live under. The
+              corpus survives estate tax, lawsuits, and their worst instincts —
+              they draw an allowance and answer to your dead hand. Age 40+, $2M+
+              cash.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">Allowance {trustPct}%/yr</span>
+              <span className="text-[11px] text-muted-foreground">
+                Allowance {trustPct}%/yr
+              </span>
               <input
                 type="range"
                 min={2}
@@ -317,24 +473,33 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
                   )
                 }
               >
-                Execute the Trust (clean-record + education clauses, Seat entailed)
+                Execute the Trust (clean-record + education clauses, Seat
+                entailed)
               </button>
             </div>
           </>
         ) : (
           <>
             <p className="mb-2 text-xs text-muted-foreground">
-              Corpus {formatMoney(dyn2.trust.corpus)} · allowance {dyn2.trust.allowancePct}%/yr ·
-              written by generation {dyn2.trust.createdGen}
-              {dyn2.trust.conditions.cleanRecord ? " · clean-record clause" : ""}
+              Corpus {formatMoney(dyn2.trust.corpus)} · allowance{" "}
+              {dyn2.trust.allowancePct}%/yr · written by generation{" "}
+              {dyn2.trust.createdGen}
+              {dyn2.trust.conditions.cleanRecord
+                ? " · clean-record clause"
+                : ""}
               {dyn2.trust.conditions.mustGraduate ? " · education clause" : ""}
               {dyn2.trust.conditions.seatEntailed ? " · Seat entailed" : ""}
             </p>
-            {dyn2.trust.createdGen !== dyn2.generation && !dyn2.trust.challengedOnce && (
-              <button className={btnDanger} onClick={() => act(challengeTrust)}>
-                Petition to Break the Trust (one attempt, ever — the fight will be in the papers)
-              </button>
-            )}
+            {dyn2.trust.createdGen !== dyn2.generation &&
+              !dyn2.trust.challengedOnce && (
+                <button
+                  className={btnDanger}
+                  onClick={() => act(challengeTrust)}
+                >
+                  Petition to Break the Trust (one attempt, ever — the fight
+                  will be in the papers)
+                </button>
+              )}
           </>
         )}
       </div>
@@ -345,19 +510,26 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           <div className="mb-1 flex items-center gap-2">
             <Flame className="h-5 w-5 text-red-400" />
             <h3 className="text-base font-bold">
-              {sin.detonated ? "The Matter, Public" : sin.known ? "The Matter" : "The Locked Room"}
+              {sin.detonated
+                ? "The Matter, Public"
+                : sin.known
+                  ? "The Matter"
+                  : "The Locked Room"}
             </h3>
           </div>
           {sin.detonated ? (
             <p className="text-xs text-muted-foreground">
-              It all came out. The family carries it openly now — which is, the Dowager notes, at
-              least cheaper.
+              It all came out. The family carries it openly now — which is, the
+              Dowager notes, at least cheaper.
             </p>
           ) : sin.known ? (
             <>
-              <p className="mb-2 text-xs italic text-muted-foreground">{sin.text}</p>
+              <p className="mb-2 text-xs italic text-muted-foreground">
+                {sin.text}
+              </p>
               <p className="mb-2 text-[11px] text-muted-foreground">
-                Exposure: {sin.exposure}/100 — at 100, it detonates. Quiet costs keep the seal.
+                Exposure: {sin.exposure}/100 — at 100, it detonates. Quiet costs
+                keep the seal.
               </p>
               <button
                 className={btn}
@@ -370,8 +542,9 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           ) : (
             <>
               <p className="mb-2 text-xs text-muted-foreground">
-                Every fortune has a first chapter nobody reads aloud. This family's is sealed —
-                exposure {sin.exposure}/100. You can open the room and know, or keep paying not to.
+                Every fortune has a first chapter nobody reads aloud. This
+                family's is sealed — exposure {sin.exposure}/100. You can open
+                the room and know, or keep paying not to.
               </p>
               <div className="flex gap-1.5">
                 <button className={btnDanger} onClick={() => act(openTheRoom)}>
@@ -397,15 +570,17 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           <h3 className="text-base font-bold">Patronage</h3>
         </div>
         <p className="mb-2 text-xs text-muted-foreground">
-          Convert money into time: endowed institutions carry the name in stone, in perpetuity. New
-          money buys things; old money buys forever.
+          Convert money into time: endowed institutions carry the name in stone,
+          in perpetuity. New money buys things; old money buys forever.
         </p>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           {ENDOWMENTS.map((e) => (
             <button
               key={e.id}
               className={btn}
-              disabled={c.money < e.cost || (dyn2?.patronage ?? []).includes(e.label)}
+              disabled={
+                c.money < e.cost || (dyn2?.patronage ?? []).includes(e.label)
+              }
               onClick={() => act((ch) => endow(ch, e.id, trySpendEnergy))}
             >
               {e.label} ({formatMoney(e.cost)})
@@ -445,7 +620,9 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           onChange={(e) => setLetterText(e.target.value)}
         />
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">Opens at heir's age {letterAge}</span>
+          <span className="text-[11px] text-muted-foreground">
+            Opens at heir's age {letterAge}
+          </span>
           <input
             type="range"
             min={16}
@@ -457,14 +634,18 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
           <button
             className={btn}
             disabled={!letterText.trim()}
-            onClick={() => act((ch) => writeLetter(ch, letterText, letterAge, 0))}
+            onClick={() =>
+              act((ch) => writeLetter(ch, letterText, letterAge, 0))
+            }
           >
             Seal the Letter
           </button>
           <button
             className={btnGhost}
             disabled={!letterText.trim() || c.money < 100000}
-            onClick={() => act((ch) => writeLetter(ch, letterText, letterAge, 100000))}
+            onClick={() =>
+              act((ch) => writeLetter(ch, letterText, letterAge, 100000))
+            }
           >
             Seal with $100k Enclosed
           </button>
@@ -483,10 +664,13 @@ export function LegacyView({ c, act }: { c: Character; act: Act }) {
                 <p className="text-xs font-semibold">
                   {a.name}{" "}
                   <span className="font-normal text-muted-foreground">
-                    · Gen {a.generation} · died at {a.diedAge} · +{a.legacyEarned} legacy
+                    · Gen {a.generation} · died at {a.diedAge} · +
+                    {a.legacyEarned} legacy
                   </span>
                 </p>
-                <p className="text-[11px] text-muted-foreground">{a.headline}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {a.headline}
+                </p>
               </div>
             ))}
           </div>

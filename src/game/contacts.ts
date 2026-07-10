@@ -23,25 +23,54 @@ const fail = (input: Character, message: string): ContactResult => ({
   ok: false,
 });
 
-export const CONTACT_TYPES: { id: ContactType; label: string; help: string }[] = [
-  { id: "professor", label: "Professor", help: "Public endorsement — boosts political reputation" },
-  {
-    id: "boss",
-    label: "Former Boss",
-    help: "Glowing reference — job performance & business reputation",
-  },
-  {
-    id: "recruiter",
-    label: "Recruiter",
-    help: "Salary bump at your current job, or a foot in the door",
-  },
-  { id: "investor", label: "Investor", help: "Invests cash into your best business" },
-  { id: "politician", label: "Politician", help: "Party support and campaign funds" },
-  { id: "agent", label: "Sports/Talent Agent", help: "Fame and endorsement money" },
-  { id: "wealthy", label: "Wealthy Friend", help: "A generous gift or campaign donation" },
-  { id: "partner", label: "Business Partner", help: "Hands-on help improving a business" },
-  { id: "lawyer", label: "Lawyer", help: "Fights charges — can clear a criminal record entry" },
-];
+export const CONTACT_TYPES: { id: ContactType; label: string; help: string }[] =
+  [
+    {
+      id: "professor",
+      label: "Professor",
+      help: "Public endorsement — boosts political reputation",
+    },
+    {
+      id: "boss",
+      label: "Former Boss",
+      help: "Glowing reference — job performance & business reputation",
+    },
+    {
+      id: "recruiter",
+      label: "Recruiter",
+      help: "Salary bump at your current job, or a foot in the door",
+    },
+    {
+      id: "investor",
+      label: "Investor",
+      help: "Invests cash into your best business",
+    },
+    {
+      id: "politician",
+      label: "Politician",
+      help: "Party support and campaign funds",
+    },
+    {
+      id: "agent",
+      label: "Sports/Talent Agent",
+      help: "Fame and endorsement money",
+    },
+    {
+      id: "wealthy",
+      label: "Wealthy Friend",
+      help: "A generous gift or campaign donation",
+    },
+    {
+      id: "partner",
+      label: "Business Partner",
+      help: "Hands-on help improving a business",
+    },
+    {
+      id: "lawyer",
+      label: "Lawyer",
+      help: "Fights charges — can clear a criminal record entry",
+    },
+  ];
 
 const HELP_COOLDOWN = 3; // years
 const MIN_REL_FOR_HELP = 60;
@@ -53,21 +82,47 @@ export function ensureContacts(c: Character): NamedContact[] {
 
 /** Contact types you're most likely to meet, weighted by the life you lead. */
 function weightedType(c: Character): ContactType {
-  const pool: ContactType[] = ["professor", "boss", "recruiter", "wealthy", "lawyer"];
-  if (c.businessHub?.businesses.length) pool.push("investor", "investor", "partner", "partner");
-  if (c.politics?.office || c.politics?.campaign) pool.push("politician", "politician", "wealthy");
+  const pool: ContactType[] = [
+    "professor",
+    "boss",
+    "recruiter",
+    "wealthy",
+    "lawyer",
+  ];
+  if (c.businessHub?.businesses.length)
+    pool.push("investor", "investor", "partner", "partner");
+  if (c.politics?.office || c.politics?.campaign)
+    pool.push("politician", "politician", "wealthy");
   if (c.fame > 20) pool.push("agent", "agent");
-  if (c.education === "graduated" || c.edu.degrees?.length) pool.push("professor", "recruiter");
+  // Agents find talent before fame does — a serious athlete or a working
+  // entertainer gets cards pressed into their hand.
+  if (c.athlete && (c.athlete.skill >= 40 || c.athlete.stage === "pro"))
+    pool.push("agent", "agent", "agent");
+  if (
+    c.entertainment &&
+    (c.entertainment.music ||
+      c.entertainment.acting ||
+      c.entertainment.influencer)
+  )
+    pool.push("agent", "agent");
+  if (c.education === "graduated" || c.edu.degrees?.length)
+    pool.push("professor", "recruiter");
   if ((c.investing?.holdings.length ?? 0) > 0) pool.push("investor");
   return randItem(pool);
 }
 
-export function meetContact(input: Character, spend: (c: Character) => boolean): ContactResult {
+export function meetContact(
+  input: Character,
+  spend: (c: Character) => boolean,
+): ContactResult {
   const c = structuredClone(input);
   const contacts = ensureContacts(c);
   if (c.age < 16) return fail(input, "A little young to be working a room.");
   if (contacts.length >= 12)
-    return fail(input, "Your circle is full — twelve real relationships is the human limit here.");
+    return fail(
+      input,
+      "Your circle is full — twelve real relationships is the human limit here.",
+    );
   if (!spend(c)) return fail(input, "No energy left this year. Age up first.");
   const type = weightedType(c);
   const label = CONTACT_TYPES.find((t) => t.id === type)!.label;
@@ -102,13 +157,19 @@ export function catchUp(
   return { character: c, message: msg, tone: "good", ok: true };
 }
 
-export function canAskHelp(c: Character, contact: NamedContact): { ok: boolean; reason?: string } {
+export function canAskHelp(
+  c: Character,
+  contact: NamedContact,
+): { ok: boolean; reason?: string } {
   if (contact.relationship < MIN_REL_FOR_HELP)
     return {
       ok: false,
       reason: `Needs ${MIN_REL_FOR_HELP}+ relationship (now ${contact.relationship})`,
     };
-  if (contact.lastHelpAge !== undefined && c.age - contact.lastHelpAge < HELP_COOLDOWN)
+  if (
+    contact.lastHelpAge !== undefined &&
+    c.age - contact.lastHelpAge < HELP_COOLDOWN
+  )
     return {
       ok: false,
       reason: `Already helped recently — ask again in ${HELP_COOLDOWN - (c.age - contact.lastHelpAge)} yr`,
@@ -154,11 +215,16 @@ export function askForHelp(input: Character, id: string): ContactResult {
       break;
     }
     case "investor": {
-      const biz = c.businessHub?.businesses.slice().sort((a, b) => b.valuation - a.valuation)[0];
+      const biz = c.businessHub?.businesses
+        .slice()
+        .sort((a, b) => b.valuation - a.valuation)[0];
       if (biz) {
         const cheque = Math.round(Math.max(40000, biz.valuation * 0.12));
         biz.cash += cheque;
-        biz.investorOwned = Math.min(0.49, Math.round((biz.investorOwned + 0.08) * 100) / 100);
+        biz.investorOwned = Math.min(
+          0.49,
+          Math.round((biz.investorOwned + 0.08) * 100) / 100,
+        );
         msg = `${contact.name} wired $${cheque.toLocaleString()} into ${biz.name} for an 8% stake.`;
       } else {
         c.money += randInt(8000, 20000);
@@ -216,7 +282,10 @@ export function askForHelp(input: Character, id: string): ContactResult {
         c.criminalRecord -= 1;
         msg = `${contact.name} got a conviction overturned on appeal. Your record is cleaner.`;
       } else if (c.politics && c.politics.scandalRisk > 0) {
-        c.politics.scandalRisk = Math.max(0, c.politics.scandalRisk - randInt(15, 25));
+        c.politics.scandalRisk = Math.max(
+          0,
+          c.politics.scandalRisk - randInt(15, 25),
+        );
         msg = `${contact.name} quietly papered over your exposure. Scandal risk reduced.`;
       } else {
         msg = `${contact.name} reviewed your affairs — everything is airtight. Peace of mind.`;

@@ -1032,6 +1032,7 @@ export interface Dynasty {
 export interface WillState {
   heirId?: string; // relationship id of the chosen child
   charityPct: number; // 0-50, boosts dynasty reputation at death
+  splits?: { relId: string; pct: number }[]; // estate division across children; absent = all to heir
   written: boolean;
   letter?: HeirloomLetter; // words for a future you won't see
 }

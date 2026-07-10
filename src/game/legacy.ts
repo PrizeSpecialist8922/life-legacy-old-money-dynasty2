@@ -3,7 +3,14 @@ import { curseAssessment, ensurePedigree } from "./oldmoney";
 import { ensureCrime } from "./crime";
 import { ensurePolitics } from "./politics";
 import { settleFamilyTree } from "./familytree";
-import type { AncestorRecord, Character, Dynasty, LogTone, Relationship, WillState } from "./types";
+import type {
+  AncestorRecord,
+  Character,
+  Dynasty,
+  LogTone,
+  Relationship,
+  WillState,
+} from "./types";
 import { clamp, randInt, randItem } from "./util";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +68,7 @@ export function writeWill(
   input: Character,
   heirId: string | undefined,
   charityPct: number,
+  splits?: { relId: string; pct: number }[],
 ): LegacyResult {
   const c = structuredClone(input);
   const w = ensureWill(c);
@@ -68,12 +76,40 @@ export function writeWill(
   const kids = livingChildren(c);
   if (heirId && !kids.some((k) => k.id === heirId))
     return fail(input, "That heir isn't one of your living children.");
+  // Estate division: percentages across living children, must total 100.
+  if (splits && splits.length) {
+    if (splits.some((s) => !kids.some((k) => k.id === s.relId)))
+      return fail(
+        input,
+        "The division names someone who isn't a living child.",
+      );
+    if (splits.some((s) => s.pct < 0 || s.pct > 100))
+      return fail(input, "Shares must be between 0% and 100%.");
+    const total = splits.reduce((s, x) => s + x.pct, 0);
+    if (Math.abs(total - 100) > 1)
+      return fail(
+        input,
+        `The shares total ${total}% — a will has to add up to 100%.`,
+      );
+    w.splits = splits.map((s) => ({ relId: s.relId, pct: s.pct }));
+  } else {
+    w.splits = undefined; // everything to the heir, the old-fashioned way
+  }
   w.heirId = heirId;
   w.charityPct = clamp(charityPct, 0, 50);
   w.written = true;
   const heirName = kids.find((k) => k.id === heirId)?.name;
+  const splitNote =
+    w.splits && kids.length > 1
+      ? ` Estate divided: ${w.splits
+          .map(
+            (s) =>
+              `${kids.find((k) => k.id === s.relId)?.name.split(" ")[0] ?? "?"} ${s.pct}%`,
+          )
+          .join(", ")}.`
+      : "";
   const msg = heirName
-    ? `Will updated: ${heirName} inherits the estate${w.charityPct ? `, ${w.charityPct}% to charity` : ""}. The lawyers have their copies.`
+    ? `Will updated: ${heirName} carries the name${w.charityPct ? `, ${w.charityPct}% to charity` : ""}.${splitNote} The lawyers have their copies.`
     : `Will updated${w.charityPct ? `: ${w.charityPct}% to charity` : ""} — no heir named yet.`;
   c.log.push({ age: c.age, text: msg, tone: "neutral" });
   return { character: c, message: msg, tone: "neutral", ok: true };
@@ -89,7 +125,10 @@ export function writeLetter(
   const c = structuredClone(input);
   const w = ensureWill(c);
   if (!text.trim())
-    return fail(input, "The page is blank. Say something — you won't get to explain it later.");
+    return fail(
+      input,
+      "The page is blank. Say something — you won't get to explain it later.",
+    );
   const money = Math.max(0, Math.min(attachedMoney, c.money));
   c.money -= money;
   w.letter = {
@@ -116,10 +155,14 @@ export function lifeLegacyScore(c: Character): number {
   let score = 0;
   score += Math.min(60, nw / 250000); // wealth
   score +=
-    (c.politics?.highestLevelWon ?? -1) >= 0 ? ((c.politics?.highestLevelWon ?? 0) + 1) * 8 : 0;
+    (c.politics?.highestLevelWon ?? -1) >= 0
+      ? ((c.politics?.highestLevelWon ?? 0) + 1) * 8
+      : 0;
   score += (c.politics?.billsPassed ?? 0) * 2;
   score +=
-    (c.athlete?.majors ?? 0) * 10 + (c.athlete?.mvps ?? 0) * 6 + (c.athlete?.hallOfFame ? 20 : 0);
+    (c.athlete?.majors ?? 0) * 10 +
+    (c.athlete?.mvps ?? 0) * 6 +
+    (c.athlete?.hallOfFame ? 20 : 0);
   score += (c.entertainment?.awards ?? 0) * 8;
   score += Math.min(20, (c.entertainment?.lifetimeEarnings ?? 0) / 500000);
   score += Math.min(15, (c.businessHub?.soldFor ?? 0) / 400000);
@@ -137,10 +180,13 @@ function lifeHeadline(c: Character): string {
     return `Led the nation as ${c.politics!.electionHistory.find((e) => e.result === "won")?.office ?? "a head of state"}`;
   if (c.athlete?.hallOfFame) return `Hall of Fame ${c.athlete.sport}`;
   if ((c.entertainment?.awards ?? 0) >= 2) return "Award-winning entertainer";
-  if ((c.businessHub?.soldFor ?? 0) > 2000000) return "Built and sold a business empire";
+  if ((c.businessHub?.soldFor ?? 0) > 2000000)
+    return "Built and sold a business empire";
   if ((c.crime?.rank ?? "") === "boss") return "Ran a criminal empire";
-  if (c.crime?.informant) return "Turned state's witness — the family never forgot";
-  if ((c.politics?.highestLevelWon ?? -1) >= 0) return "A life in public service";
+  if (c.crime?.informant)
+    return "Turned state's witness — the family never forgot";
+  if ((c.politics?.highestLevelWon ?? -1) >= 0)
+    return "A life in public service";
   if (c.money > 2000000) return "Died wealthy and comfortable";
   return "Lived a full life";
 }
@@ -178,7 +224,11 @@ export function createHeir(
   const kids = livingChildren(dead);
   const chosen = kids.find((k) => k.id === heirId) ?? kids[0];
   const dynasty = structuredClone(ensureDynasty(structuredClone(dead)));
-  const will = dead.will ?? { charityPct: 0, written: false, heirId: undefined };
+  const will = dead.will ?? {
+    charityPct: 0,
+    written: false,
+    heirId: undefined,
+  };
   const drama: string[] = [];
 
   // --- Tally the dead life into the dynasty ---
@@ -187,9 +237,11 @@ export function createHeir(
   dynasty.generation += 1;
   dynasty.wealthCreated += Math.max(0, dead.money);
   dynasty.officesWon +=
-    dead.politics?.electionHistory.filter((e) => e.result === "won" && e.stage === "general")
-      .length ?? 0;
-  dynasty.championships += (dead.athlete?.majors ?? 0) + (dead.athlete?.beltDefenses ?? 0);
+    dead.politics?.electionHistory.filter(
+      (e) => e.result === "won" && e.stage === "general",
+    ).length ?? 0;
+  dynasty.championships +=
+    (dead.athlete?.majors ?? 0) + (dead.athlete?.beltDefenses ?? 0);
   dynasty.awards += dead.entertainment?.awards ?? 0;
   dynasty.billsPassed += dead.politics?.billsPassed ?? 0;
   dynasty.crimesGottenAwayWith += Math.max(
@@ -213,7 +265,10 @@ export function createHeir(
   // Pedigree: only quiet, intact generations earn it. Noise erodes it.
   ensurePedigree(dynasty);
   const quietGain =
-    6 - Math.min(4, Math.floor(dead.fame / 25)) - dead.criminalRecord * 2 + (dynasty.seat ? 2 : 0);
+    6 -
+    Math.min(4, Math.floor(dead.fame / 25)) -
+    dead.criminalRecord * 2 +
+    (dynasty.seat ? 2 : 0);
   dynasty.pedigree = clamp((dynasty.pedigree ?? 0) + Math.max(-3, quietGain));
   if (dead.crime?.informant) dynasty.markedBySyndicate = "the families";
   if (dead.society?.member && dead.society.standing >= 70)
@@ -228,7 +283,9 @@ export function createHeir(
   // most of it. Collections stay on the dynasty — art doesn't read wills.
   const fleet = dead.lifestyle?.transport ?? [];
   if (fleet.length) {
-    const fleetValue = Math.round(fleet.reduce((s, t) => s + t.value, 0) * 0.75);
+    const fleetValue = Math.round(
+      fleet.reduce((s, t) => s + t.value, 0) * 0.75,
+    );
     grossEstate += fleetValue;
     drama.push(
       `The ${fleet.map((t) => t.name.toLowerCase()).join(" and ")} went to auction — $${fleetValue.toLocaleString()} back into the estate.`,
@@ -272,7 +329,8 @@ export function createHeir(
 
   // --- Build the heir ---
   const heirAge = Math.max(0, Math.min(chosen?.age ?? 18, 60));
-  const blend = (p: number) => clamp(Math.round(p * 0.5 + 50 * 0.2 + randInt(-15, 25)), 10, 100);
+  const blend = (p: number) =>
+    clamp(Math.round(p * 0.5 + 50 * 0.2 + randInt(-15, 25)), 10, 100);
   // A genuinely fresh life (correct defaults for every subsystem), then layer
   // the inheritance on top.
   const heir: Character = createCharacter({
@@ -290,7 +348,9 @@ export function createHeir(
   // The upbringing record is the real inheritance.
   const rec = dead.children?.find((k) => k.relId === (chosen?.id ?? ""));
   if (rec) {
-    heir.stats.smarts = clamp(Math.round(heir.stats.smarts * 0.5 + rec.academics * 0.5 + 5));
+    heir.stats.smarts = clamp(
+      Math.round(heir.stats.smarts * 0.5 + rec.academics * 0.5 + 5),
+    );
     if (rec.cutOff)
       drama.push(
         "The chosen heir had been cut off — the reconciliation at the deathbed was brief, and binding.",
@@ -325,7 +385,53 @@ export function createHeir(
       );
     }
   }
-  heir.money = Math.max(0, netCash);
+  // --- Build 11B.2: the estate divides among the children per the will ---
+  let heirCash = netCash;
+  if (will.splits?.length && kids.length > 1) {
+    const fair = 100 / kids.length;
+    const pctOf = (id: string) =>
+      will.splits!.find((s) => s.relId === id)?.pct ?? 0;
+    heirCash = Math.round(netCash * (pctOf(chosen?.id ?? "") / 100));
+    const payouts: string[] = [];
+    for (const kid of kids) {
+      if (kid.id === chosen?.id) continue;
+      const pct = pctOf(kid.id);
+      const amount = Math.round(netCash * (pct / 100));
+      const krec = dead.children?.find((k) => k.relId === kid.id);
+      if (amount > 0)
+        payouts.push(`${kid.name} — $${amount.toLocaleString()} (${pct}%)`);
+      if (krec?.cutOff && pct >= 10) {
+        dynasty.reputation = clamp(dynasty.reputation + 2);
+        drama.push(
+          `${kid.name} — cut off in life, remembered in death. The ${pct}% said what was never said aloud.`,
+        );
+      } else if (!krec?.cutOff && pct === 0) {
+        dynasty.unity = clamp((dynasty.unity ?? 60) - 3);
+        drama.push(
+          `${kid.name} received nothing. They left before the lawyer finished the sentence.`,
+        );
+      }
+      if ((krec?.resentment ?? 0) >= 70 && pct < fair - 5) {
+        const burn = Math.round(netCash * 0.05);
+        heirCash = Math.max(0, heirCash - burn);
+        drama.push(
+          `${kid.name} CONTESTED THE WILL — years of resentment plus a short share. $${burn.toLocaleString()} burned in court before it settled.`,
+        );
+      }
+    }
+    if (payouts.length)
+      drama.push(
+        `The estate divided: ${payouts.join("; ")}. The name goes to one; the money went to all.`,
+      );
+    const spread = kids.map((k) => pctOf(k.id));
+    if (kids.length > 1 && Math.max(...spread) - Math.min(...spread) <= 10) {
+      dynasty.unity = clamp((dynasty.unity ?? 60) + 4);
+      drama.push(
+        "An even division. Nobody was thrilled; nobody was wronged. That is what fair feels like.",
+      );
+    }
+  }
+  heir.money = Math.max(0, heirCash);
   if (heirAge >= 22) heir.education = "graduated";
   heir.log = [];
   heir.relationships = dead.relationships
@@ -368,7 +474,11 @@ export function createHeir(
     }
     const curse = curseAssessment(rec.spoiled, rec.grit, dynasty.generation);
     if (curse.line)
-      heir.log.push({ age: heirAge, text: curse.line, tone: curse.gilded ? "bad" : "milestone" });
+      heir.log.push({
+        age: heirAge,
+        text: curse.line,
+        tone: curse.gilded ? "bad" : "milestone",
+      });
     if (curse.gilded) {
       heir.gilded = true;
       heir.stats.happiness = clamp(heir.stats.happiness - 5);
@@ -422,7 +532,8 @@ export function createHeir(
     for (const b of dead.businessHub.businesses) {
       if (!will.written && Math.random() < 0.5) {
         const sale = Math.round(
-          Math.max(0, (b.valuation + b.cash - b.loan) * (1 - b.investorOwned)) * 0.7,
+          Math.max(0, (b.valuation + b.cash - b.loan) * (1 - b.investorOwned)) *
+            0.7,
         );
         heir.money += sale;
         lost++;
@@ -435,13 +546,20 @@ export function createHeir(
       if (Math.random() < 0.35) {
         nb.quality = clamp(nb.quality - randInt(10, 20));
         nb.reputation = clamp(nb.reputation - randInt(8, 15));
-        drama.push(`Succession crisis at ${nb.name}: key people walked when the founder died.`);
+        drama.push(
+          `Succession crisis at ${nb.name}: key people walked when the founder died.`,
+        );
       }
       surviving.push(nb);
       kept++;
     }
     if (surviving.length)
-      heir.businessHub = { businesses: surviving, lifetimeProfit: 0, soldFor: 0, failures: 0 };
+      heir.businessHub = {
+        businesses: surviving,
+        lifetimeProfit: 0,
+        soldFor: 0,
+        failures: 0,
+      };
   }
 
   // --- Path inheritances ---
@@ -492,7 +610,8 @@ export function createHeir(
     propertiesKept,
   };
 
-  for (const d of report.drama) heir.log.unshift({ age: heirAge, text: d, tone: "neutral" });
+  for (const d of report.drama)
+    heir.log.unshift({ age: heirAge, text: d, tone: "neutral" });
   heir.log.unshift({
     age: heirAge,
     text: `Generation ${dynasty.generation} of the ${dynasty.familyName} dynasty begins. ${dead.name} (${ancestor.headline.toLowerCase()}) left you $${report.netToHeir.toLocaleString()} after taxes.`,

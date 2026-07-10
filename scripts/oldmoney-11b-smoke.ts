@@ -31,7 +31,12 @@ import {
   joinBoard,
 } from "../src/game/philanthropy";
 import { familyNetWorth, prestigeBreakdown } from "../src/game/prestige";
-import { findPartner, propose, tryForBaby } from "../src/game/upbringing";
+import {
+  ensureChildren,
+  findPartner,
+  propose,
+  tryForBaby,
+} from "../src/game/upbringing";
 import type { Character } from "../src/game/types";
 
 let pass = 0;
@@ -231,9 +236,38 @@ if (kidRel) {
 }
 
 // --- Succession: dynasty carries the 11B state ---
+// Guarantee a sibling so estate division is exercised.
+{
+  const siblings = c.relationships.filter((r) => r.type === "child" && r.alive);
+  if (siblings.length === 1) {
+    c.relationships.push({
+      id: `child-test-${Date.now()}`,
+      name: `Cassius ${c.name.split(" ").slice(-1)[0]}`,
+      type: "child",
+      relationship: 80,
+      age: 20,
+      alive: true,
+    });
+    ensureChildren(c);
+  }
+}
 const kid = c.relationships.find((r) => r.type === "child" && r.alive);
 if (kid) {
-  c = writeWill(c, kid.id, 10).character;
+  // Divide the estate if there's more than one child; otherwise all to heir.
+  const allKids = c.relationships.filter((r) => r.type === "child" && r.alive);
+  if (allKids.length > 1) {
+    const even = Math.floor(100 / allKids.length);
+    const splits = allKids.map((k, i) => ({
+      relId: k.id,
+      pct: i === 0 ? 100 - even * (allKids.length - 1) : even,
+    }));
+    const badSplit = writeWill(c, kid.id, 10, [{ relId: kid.id, pct: 40 }]);
+    check("lopsided split rejected (must total 100)", !badSplit.ok);
+    c = writeWill(c, kid.id, 10, splits).character;
+    check("split will written", c.will?.splits?.length === allKids.length);
+  } else {
+    c = writeWill(c, kid.id, 10).character;
+  }
   // age the child up so they can inherit sensibly
   const rel = c.relationships.find((r) => r.id === kid.id)!;
   rel.age = 25;
