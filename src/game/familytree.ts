@@ -96,7 +96,7 @@ export function advanceFamilyTree(c: Character, log: LogEntry[]) {
   );
   for (const rel of kids) {
     const k = c.children?.find((x) => x.relId === rel.id);
-    if (!k || k.spouseName) continue;
+    if (!k || k.spouseName || k.courtship || k.branchId) continue;
     const chance = clamp(
       6 + (rel.age - 23) * 1.5 + unity / 20 - k.resentment / 12,
       2,
@@ -105,6 +105,20 @@ export function advanceFamilyTree(c: Character, log: LogEntry[]) {
     if (randInt(1, 100) > chance) continue;
     k.spouseName = spouseName();
     k.marriedAtAge = rel.age;
+    // Constitution: a marriage without a contract breaks the house's law.
+    const contractRule = d.constitution?.find(
+      (r) => r.id === "contract_marriages" && r.active && !r.broken,
+    );
+    if (contractRule) {
+      contractRule.broken = true;
+      d.unity = clamp((d.unity ?? 60) - 6);
+      d.reputation = clamp(d.reputation - 4);
+      log.push({
+        age: c.age,
+        text: `CONSTITUTIONAL CRISIS: "No marriage without a contract" is broken — ${rel.name} married without one. The Council's minutes will be frosty.`,
+        tone: "bad",
+      });
+    }
     if (k.cutOff) {
       d.unity = clamp(unity - 2);
       pushArchive(

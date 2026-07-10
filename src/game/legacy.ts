@@ -3,6 +3,7 @@ import { curseAssessment, ensurePedigree } from "./oldmoney";
 import { ensureCrime } from "./crime";
 import { ensurePolitics } from "./politics";
 import { settleFamilyTree } from "./familytree";
+import { settleHouseAffairs } from "./matchmaking";
 import type {
   AncestorRecord,
   Character,
@@ -356,7 +357,7 @@ export function createHeir(
         "The chosen heir had been cut off — the reconciliation at the deathbed was brief, and binding.",
       );
     if (rec.resentment >= 70) {
-      const burn = Math.round(netCash * 0.1);
+      const burn = Math.round(netCash * ((dynasty.office?.tier ?? 0) >= 3 ? 0.05 : 0.1));
       netCash -= burn;
       drama.push(
         `THE READING WENT BADLY: years of resentment surfaced as litigation over terms. $${burn.toLocaleString()} burned in a fight nobody needed.`,
@@ -412,7 +413,7 @@ export function createHeir(
         );
       }
       if ((krec?.resentment ?? 0) >= 70 && pct < fair - 5) {
-        const burn = Math.round(netCash * 0.05);
+        const burn = Math.round(netCash * ((dynasty.office?.tier ?? 0) >= 3 ? 0.025 : 0.05));
         heirCash = Math.max(0, heirCash - burn);
         drama.push(
           `${kid.name} CONTESTED THE WILL — years of resentment plus a short share. $${burn.toLocaleString()} burned in court before it settled.`,
@@ -432,6 +433,10 @@ export function createHeir(
     }
   }
   heir.money = Math.max(0, heirCash);
+  // Build 11B.3: heirlooms change hands, the Constitution is checked at the
+  // moment it matters, and a second child taking a major share founds a
+  // cadet branch with it.
+  settleHouseAffairs(dead, heir, chosen?.id, dynasty, netCash, drama);
   if (heirAge >= 22) heir.education = "graduated";
   heir.log = [];
   heir.relationships = dead.relationships

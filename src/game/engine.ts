@@ -70,6 +70,10 @@ import { advanceCollections } from "./collections";
 import { advancePhilanthropy } from "./philanthropy";
 import { advanceRecords } from "./records";
 import { advanceFamilyTree } from "./familytree";
+import { advanceCouncil } from "./council";
+import { advanceRivals } from "./rivals";
+import { advanceBankOfficePress } from "./familybank";
+import { advanceMatchmaking } from "./matchmaking";
 import { advanceGoals } from "./prestige";
 import type {
   Character,
@@ -921,6 +925,10 @@ export function ageUp(input: Character): AgeUpResult {
   advancePhilanthropy(c, c.log);
   advanceRecords(c, c.log);
   advanceFamilyTree(c, c.log);
+  advanceMatchmaking(c, c.log);
+  advanceCouncil(c, c.log);
+  advanceRivals(c, c.log);
+  advanceBankOfficePress(c, c.log);
   advanceGoals(c, c.log);
   // The Third-Generation Curse is beatable: earn something real and it cracks.
   if (c.gilded) {

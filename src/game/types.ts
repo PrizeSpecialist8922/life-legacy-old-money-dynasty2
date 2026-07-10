@@ -819,6 +819,10 @@ export interface ChildRecord {
   brokerage?: number; // their own small account
   spouseName?: string; // background marriage — life happens whether you watch or not
   marriedAtAge?: number;
+  courtship?: Courtship; // an arranged introduction in progress
+  prenup?: boolean; // the marriage carries a contract
+  contract?: string; // rival | political | fortune — what the match was for
+  branchId?: string; // founded a cadet branch and left the main line
 }
 
 export interface FamilySeat {
@@ -994,6 +998,117 @@ export interface DescendantRecord {
   spouseName?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Build 11B.3 — governance, rivals, leverage, the family bank, scandal, and
+// heirlooms. A dynasty at this size stops being a household and becomes a
+// small state: it has a council, a treasury, enemies, and a vault.
+// ---------------------------------------------------------------------------
+
+export interface CouncilMatter {
+  id: string;
+  kind: string; // venture | feud | sale | heir | rival | reaffirm
+  title: string;
+  text: string;
+  options: { id: string; label: string; hint?: string }[];
+  data?: Record<string, string | number>;
+}
+
+export interface CouncilState {
+  established: boolean;
+  yearsHeld: number;
+  pending?: CouncilMatter;
+  lastOutcome?: string;
+}
+
+export interface ConstitutionRule {
+  id: string; // rule def id
+  active: boolean;
+  keptYears: number;
+  broken?: boolean;
+}
+
+export interface RivalDynasty {
+  id: string;
+  name: string; // "the Ashworths"
+  wealth: number;
+  prestige: number; // 0-100
+  relation: number; // -100 feud .. 100 alliance
+  leverageOnYou: number; // 0-100 — what they know
+  alliedByMarriage?: boolean;
+}
+
+export interface LeverageItem {
+  id: string;
+  rivalId: string;
+  rivalName: string;
+  label: string;
+  potency: number; // 20-60
+}
+
+export interface FamilyLoan {
+  id: string;
+  borrower: string;
+  amount: number;
+  rate: number; // %
+  yearsLeft: number;
+  owed: number;
+  delinquent?: boolean;
+}
+
+export interface BankRequest {
+  id: string;
+  borrower: string;
+  amount: number;
+  reason: string;
+}
+
+export interface FamilyBankState {
+  loans: FamilyLoan[];
+  lifetimeLent: number;
+  lifetimeForgiven: number;
+  pendingRequest?: BankRequest;
+}
+
+export interface ScandalState {
+  active?: { id: string; headline: string; heat: number; yearsRunning: number };
+  suppressed: number;
+  weathered: number;
+}
+
+export interface Heirloom {
+  id: string;
+  name: string;
+  description: string;
+  holder: string; // whose hands it is in
+  assignedTo?: string; // relId named in the will
+  significance: number; // 0-100
+  generationAcquired: number;
+}
+
+export interface FamilyOfficeState {
+  tier: number; // 0 none, 1-3
+  feesPaid: number;
+  earned: number;
+  scandalsKilled: number;
+}
+
+export interface CadetBranch {
+  id: string;
+  name: string; // "House Vane of Ashford"
+  founder: string;
+  wealth: number;
+  prestige: number; // 0-100
+  loyalty: number; // 0-100
+  foundedGeneration: number;
+}
+
+export interface Courtship {
+  target: string; // rival | political | fortune | love
+  targetRivalId?: string;
+  prenup: boolean;
+  yearsLeft: number;
+}
+
 export interface Dynasty {
   familyName: string;
   generation: number;
@@ -1027,6 +1142,16 @@ export interface Dynasty {
   boardYearsTotal?: number; // cumulative family board service
   foundationsLaunched?: number;
   descendants?: DescendantRecord[]; // the tree grows in the background — grandchildren and beyond
+  // ---- Build 11B.3 ----
+  council?: CouncilState;
+  constitution?: ConstitutionRule[];
+  rivals?: RivalDynasty[];
+  vault?: LeverageItem[];
+  bank?: FamilyBankState;
+  press?: ScandalState;
+  heirlooms?: Heirloom[];
+  office?: FamilyOfficeState;
+  branches?: CadetBranch[];
 }
 
 export interface WillState {

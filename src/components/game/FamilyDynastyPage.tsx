@@ -7,13 +7,50 @@ import {
   Castle,
   Crown,
   Gem,
+  GitBranch,
   HandHeart,
+  Heart,
+  KeyRound,
   Landmark,
   Martini,
+  Newspaper,
+  PiggyBank,
   Repeat,
+  Scale,
+  Swords,
   Users,
 } from "lucide-react";
 import { trySpendEnergy } from "../../game/engine";
+import {
+  CONSTITUTION_RULES,
+  adoptRule,
+  establishCouncil,
+  reaffirmRule,
+  repealRule,
+  resolveCouncil,
+  ruleDef,
+} from "../../game/council";
+import { ensureRivals, investigateRival, useLeverage } from "../../game/rivals";
+import type { LeverageUse } from "../../game/rivals";
+import {
+  OFFICE_TIERS,
+  approveLoan,
+  forgiveLoan,
+  giftInstead,
+  pressLoan,
+  refuseLoan,
+  setOfficeTier,
+  spinScandal,
+  suppressScandal,
+} from "../../game/familybank";
+import {
+  MATCH_TARGETS,
+  arrangeIntroduction,
+  assignHeirloom,
+  commissionHeirloom,
+  foundBranch,
+} from "../../game/matchmaking";
+import { renameSeat, renovateSeat } from "../../game/lifestyle";
 import {
   ESTATE_UPGRADES,
   STAFF_ROLES,
@@ -162,6 +199,9 @@ type DynView =
   | "collections"
   | "philanthropy"
   | "library"
+  | "council"
+  | "rivals"
+  | "bank"
   | "archives"
   | "legacy";
 
@@ -181,6 +221,9 @@ export function FamilyDynastyPage({
     { id: "estate", label: "Estate" },
     { id: "clubs", label: "Clubs" },
     { id: "traditions", label: "Traditions" },
+    { id: "council", label: "Council" },
+    { id: "rivals", label: "Rivals" },
+    { id: "bank", label: "Bank" },
     { id: "collections", label: "Collections" },
     { id: "philanthropy", label: "Philanthropy" },
     { id: "library", label: "Library" },
@@ -206,20 +249,29 @@ export function FamilyDynastyPage({
         ))}
       </div>
 
-      {view === "overview" && <OverviewView c={c} />}
+      {view === "overview" && <OverviewView c={c} act={act} />}
       {view === "family" && (
         <div className="space-y-3">
           <FamilyView c={c} act={act} />
+          <MatchmakingSection c={c} act={act} />
           <ExtendedFamily c={c} />
         </div>
       )}
       {view === "estate" && <EstateView c={c} act={act} />}
       {view === "clubs" && <ClubsView c={c} act={act} />}
       {view === "traditions" && <TraditionsView c={c} act={act} />}
-      {view === "collections" && <CollectionsView c={c} act={act} />}
+      {view === "collections" && (
+        <div className="space-y-3">
+          <CollectionsView c={c} act={act} />
+          <HeirloomsSection c={c} act={act} />
+        </div>
+      )}
       {view === "philanthropy" && <PhilanthropyView c={c} act={act} />}
       {view === "library" && <LibraryView c={c} />}
       {view === "archives" && <ArchivesView c={c} />}
+      {view === "council" && <CouncilView c={c} act={act} />}
+      {view === "rivals" && <RivalsView c={c} act={act} />}
+      {view === "bank" && <BankView c={c} act={act} />}
       {view === "legacy" && <LegacyView c={c} act={act} />}
     </div>
   );
@@ -227,7 +279,7 @@ export function FamilyDynastyPage({
 
 // ---------- Overview: the dynasty dashboard ----------
 
-function OverviewView({ c }: { c: Character }) {
+function OverviewView({ c, act }: { c: Character; act: Act }) {
   const d = c.dynasty;
   const p = prestigeBreakdown(c);
   const goalsDone = d?.goalsDone ?? [];
@@ -235,6 +287,7 @@ function OverviewView({ c }: { c: Character }) {
 
   return (
     <div className="space-y-3">
+      <ScandalBanner c={c} act={act} />
       <Section
         icon={Crown}
         title={d ? `House ${d.familyName}` : "The Family"}
@@ -329,6 +382,7 @@ function EstateView({ c, act }: { c: Character; act: Act }) {
 
   return (
     <div className="space-y-3">
+      <SeatCustomization c={c} act={act} />
       <Section
         icon={Castle}
         title={seat ? seat.name : "The Family Estate"}
@@ -1265,6 +1319,832 @@ function ExtendedFamily({ c }: { c: Character }) {
           Remembered: {departed.map((t) => t.name).join(", ")}
         </p>
       )}
+    </Section>
+  );
+}
+
+// ---------- Council: matters on the table + the Constitution ----------
+
+function CouncilView({ c, act }: { c: Character; act: Act }) {
+  const d = c.dynasty;
+  const council = d?.council;
+  const matter = council?.pending;
+  const rules = d?.constitution ?? [];
+
+  return (
+    <div className="space-y-3">
+      <Section
+        icon={Scale}
+        title="The Family Council"
+        subtitle="One long table, one meeting a year. Matters left unresolved go stale and cost unity."
+      >
+        {!council?.established ? (
+          <div>
+            <p className="mb-2 text-xs text-muted-foreground">
+              The Council needs at least one adult child. Once established it
+              convenes automatically every year and puts real decisions on the
+              table.
+            </p>
+            <button
+              className={btn}
+              onClick={() => act((ch) => establishCouncil(ch))}
+            >
+              Establish the Family Council
+            </button>
+          </div>
+        ) : (
+          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Stat label="Years Convened" value={`${council.yearsHeld}`} />
+            <Stat label="Family Unity" value={`${d?.unity ?? 60}/100`} />
+            <Stat
+              label="Articles in Force"
+              value={`${rules.filter((r) => r.active && !r.broken).length}`}
+            />
+          </div>
+        )}
+        {council?.established && !matter && (
+          <p className="text-xs text-muted-foreground">
+            {council.lastOutcome
+              ? `Last session: ${council.lastOutcome}`
+              : "No matter is currently before the Council. Next session convenes at year's end."}
+          </p>
+        )}
+        {matter && (
+          <div className="rounded-xl border border-primary/40 bg-primary/10 p-3">
+            <p className="text-sm font-bold">{matter.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{matter.text}</p>
+            <div className="mt-2 space-y-1.5">
+              {matter.options.map((o) => (
+                <button
+                  key={o.id}
+                  className={`${btnGhost} w-full text-left`}
+                  onClick={() => act((ch) => resolveCouncil(ch, o.id))}
+                >
+                  <span className="font-semibold text-foreground">
+                    {o.label}
+                  </span>
+                  {o.hint && (
+                    <span className="ml-1 text-muted-foreground">
+                      — {o.hint}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
+
+      <Section
+        icon={Scale}
+        title="The Family Constitution"
+        subtitle="House law. Every article is audited every year — the checkmarks below are earned, not decorative."
+      >
+        {rules.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {rules.map((r) => {
+              const def = ruleDef(r.id);
+              return (
+                <div
+                  key={r.id}
+                  className={`rounded-xl border p-3 ${
+                    r.broken
+                      ? "border-red-400/40 bg-red-500/10"
+                      : "border-primary/40 bg-primary/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold">
+                      {r.broken ? "✗" : "✓"} {def?.label ?? r.id}
+                    </p>
+                    <div className="flex gap-2">
+                      {r.broken && (
+                        <button
+                          className={btnGhost}
+                          onClick={() => act((ch) => reaffirmRule(ch, r.id))}
+                        >
+                          Reaffirm ($100k)
+                        </button>
+                      )}
+                      <button
+                        className={btnDanger}
+                        onClick={() => act((ch) => repealRule(ch, r.id))}
+                      >
+                        Repeal
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {def?.detail}{" "}
+                    {r.broken
+                      ? "· BROKEN"
+                      : `· kept ${r.keptYears} yr${r.keptYears === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {CONSTITUTION_RULES.filter(
+            (def) => !rules.some((r) => r.id === def.id),
+          ).map((def) => (
+            <div
+              key={def.id}
+              className="rounded-xl border border-white/10 bg-white/5 p-3"
+            >
+              <p className="text-sm font-bold">{def.label}</p>
+              <p className="text-[11px] text-muted-foreground">{def.detail}</p>
+              <button
+                className={`${btn} mt-2`}
+                disabled={!council?.established}
+                onClick={() => act((ch) => adoptRule(ch, def.id))}
+              >
+                Adopt
+              </button>
+            </div>
+          ))}
+        </div>
+        {!council?.established && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Adopting articles requires an established Council.
+          </p>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ---------- Rivals & The Vault ----------
+
+function RivalsView({ c, act }: { c: Character; act: Act }) {
+  const [use, setUse] = useState<Record<string, LeverageUse>>({});
+  // ensureRivals mutates a clone via act pattern normally; for display, read directly
+  const rivals = c.dynasty?.rivals ?? [];
+  const vault = c.dynasty?.vault ?? [];
+
+  return (
+    <div className="space-y-3">
+      <Section
+        icon={Swords}
+        title="Rival Dynasties"
+        subtitle="Every old family has an opposite number. Rivalries are conducted in auction paddles, board votes and seating charts."
+      >
+        {rivals.length === 0 ? (
+          <div>
+            <p className="mb-2 text-xs text-muted-foreground">
+              No rivals yet — acquire a Seat or build reputation, and the
+              opposite numbers will introduce themselves.
+            </p>
+            <button
+              className={btnGhost}
+              onClick={() =>
+                act((ch) => {
+                  const out = structuredClone(ch);
+                  ensureRivals(out);
+                  return {
+                    character: out,
+                    message: "You start noticing which families notice you.",
+                    tone: "neutral" as const,
+                    ok: true,
+                  };
+                })
+              }
+            >
+              Take Stock of Society
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {rivals.map((r) => (
+              <div
+                key={r.id}
+                className="rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold">
+                      {r.name}
+                      {r.alliedByMarriage ? " · allied by marriage" : ""}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Wealth {formatMoney(r.wealth)} · prestige {r.prestige} ·
+                      relations{" "}
+                      {r.relation > 30
+                        ? "warm"
+                        : r.relation > -10
+                          ? "cool"
+                          : r.relation > -50
+                            ? "hostile"
+                            : "open feud"}{" "}
+                      ({r.relation})
+                      {r.leverageOnYou >= 20
+                        ? ` · they hold a file on you (${r.leverageOnYou})`
+                        : ""}
+                    </p>
+                  </div>
+                  <button
+                    className={btn}
+                    disabled={c.money < 250000}
+                    onClick={() =>
+                      act((ch) => investigateRival(ch, r.id, trySpendEnergy))
+                    }
+                  >
+                    Investigate ($250k, 1 energy)
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section
+        icon={KeyRound}
+        title="The Vault"
+        subtitle="What the family knows, sealed and patient. Using an item consumes it."
+      >
+        {vault.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Empty. Investigations fill it; patience arms it.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {vault.map((v) => (
+              <div
+                key={v.id}
+                className="rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <p className="text-sm font-bold">{v.label}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Concerning {v.rivalName} · potency {v.potency}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <select
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:outline-none"
+                    value={use[v.id] ?? "relation"}
+                    onChange={(e) =>
+                      setUse({ ...use, [v.id]: e.target.value as LeverageUse })
+                    }
+                  >
+                    <option value="relation">
+                      Force a détente (relations +)
+                    </option>
+                    <option value="board">
+                      Win a board fight (influence +)
+                    </option>
+                    <option value="scandal">Kill the running story</option>
+                    <option value="marriage">
+                      Secure a courtship with them
+                    </option>
+                  </select>
+                  <button
+                    className={btn}
+                    onClick={() =>
+                      act((ch) =>
+                        // eslint-disable-next-line react-hooks/rules-of-hooks -- game function, not a React hook
+                        useLeverage(ch, v.id, use[v.id] ?? "relation"),
+                      )
+                    }
+                  >
+                    Use It
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ---------- The Family Bank & Family Office ----------
+
+function BankView({ c, act }: { c: Character; act: Act }) {
+  const bank = c.dynasty?.bank;
+  const office = c.dynasty?.office;
+  const req = bank?.pendingRequest;
+
+  return (
+    <div className="space-y-3">
+      <Section
+        icon={PiggyBank}
+        title="The Family Bank"
+        subtitle="Relatives financed on terms, or on trust. Deadbeats strain unity; forgiveness buys it."
+      >
+        {req ? (
+          <div className="mb-3 rounded-xl border border-primary/40 bg-primary/10 p-3">
+            <p className="text-sm font-bold">
+              {req.borrower} asks for {formatMoney(req.amount)}
+            </p>
+            <p className="text-xs text-muted-foreground">For {req.reason}.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                className={btn}
+                disabled={c.money < req.amount}
+                onClick={() => act((ch) => approveLoan(ch, 0))}
+              >
+                Lend at 0%
+              </button>
+              <button
+                className={btn}
+                disabled={c.money < req.amount}
+                onClick={() => act((ch) => approveLoan(ch, 5))}
+              >
+                Lend at 5%
+              </button>
+              <button
+                className={btn}
+                disabled={c.money < req.amount}
+                onClick={() => act((ch) => approveLoan(ch, 10))}
+              >
+                Lend at 10%
+              </button>
+              <button
+                className={btnGhost}
+                disabled={c.money < req.amount}
+                onClick={() => act((ch) => giftInstead(ch))}
+              >
+                Gift It
+              </button>
+              <button
+                className={btnDanger}
+                onClick={() => act((ch) => refuseLoan(ch))}
+              >
+                Refuse
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="mb-3 text-xs text-muted-foreground">
+            Nobody at the window. Requests arrive on their own.
+          </p>
+        )}
+        {(bank?.loans.length ?? 0) > 0 && (
+          <div className="space-y-2">
+            {bank!.loans.map((l) => (
+              <div
+                key={l.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <div>
+                  <p className="text-sm font-bold">
+                    {l.borrower}
+                    {l.delinquent ? " · DELINQUENT" : ""}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Owes {formatMoney(l.owed)} · {l.rate}% · {l.yearsLeft} yr
+                    {l.yearsLeft === 1 ? "" : "s"} left
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className={btnGhost}
+                    onClick={() => act((ch) => forgiveLoan(ch, l.id))}
+                  >
+                    Forgive
+                  </button>
+                  {l.delinquent && (
+                    <button
+                      className={btnDanger}
+                      onClick={() => act((ch) => pressLoan(ch, l.id))}
+                    >
+                      Send Lawyers
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {bank && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Lifetime lent {formatMoney(bank.lifetimeLent)} · forgiven{" "}
+            {formatMoney(bank.lifetimeForgiven)}
+          </p>
+        )}
+      </Section>
+
+      <Section
+        icon={Landmark}
+        title="The Family Office"
+        subtitle="Professionals between you and your money. Fees yearly; services quietly."
+      >
+        <div className="grid gap-2 sm:grid-cols-3">
+          {OFFICE_TIERS.map((t) => (
+            <div
+              key={t.tier}
+              className={`rounded-xl border p-3 ${
+                office?.tier === t.tier
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-white/10 bg-white/5"
+              }`}
+            >
+              <p className="text-sm font-bold">{t.name}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {t.feePct}%/yr of liquid assets · {t.hint}
+              </p>
+              {office?.tier !== t.tier && (
+                <button
+                  className={`${btn} mt-2`}
+                  onClick={() => act((ch) => setOfficeTier(ch, t.tier))}
+                >
+                  Engage
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {(office?.tier ?? 0) > 0 && (
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-[11px] text-muted-foreground">
+              Fees paid {formatMoney(office!.feesPaid)} · earned{" "}
+              {formatMoney(office!.earned)} · scandals killed{" "}
+              {office!.scandalsKilled}
+            </p>
+            <button
+              className={btnDanger}
+              onClick={() => act((ch) => setOfficeTier(ch, 0))}
+            >
+              Dissolve
+            </button>
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ---------- The Society Pages banner (rendered on Overview) ----------
+
+function ScandalBanner({ c, act }: { c: Character; act: Act }) {
+  const s = c.dynasty?.press?.active;
+  if (!s) return null;
+  return (
+    <Section
+      icon={Newspaper}
+      title="The Society Pages"
+      subtitle="A story is running. It costs reputation and unity every year it lives."
+    >
+      <div className="rounded-xl border border-red-400/40 bg-red-500/10 p-3">
+        <p className="text-sm font-bold">"{s.headline}"</p>
+        <p className="text-[11px] text-muted-foreground">
+          Heat {s.heat} · running {s.yearsRunning} yr
+          {s.yearsRunning === 1 ? "" : "s"}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            className={btn}
+            onClick={() => act((ch) => suppressScandal(ch))}
+          >
+            Suppress (~
+            {formatMoney(
+              s.heat * 40000 * ((c.dynasty?.office?.tier ?? 0) >= 2 ? 0.7 : 1),
+            )}
+            )
+          </button>
+          <button
+            className={btnGhost}
+            onClick={() => act((ch) => spinScandal(ch, trySpendEnergy))}
+          >
+            Spin It (1 energy)
+          </button>
+          <span className="self-center text-[11px] text-muted-foreground">
+            …or outlast it. Stories starve in ~3 years.
+          </span>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ---------- Matchmaking & Cadet Branches (rendered under Family tab) ----------
+
+function MatchmakingSection({ c, act }: { c: Character; act: Act }) {
+  const [target, setTarget] = useState<Record<string, string>>({});
+  const [prenup, setPrenup] = useState<Record<string, boolean>>({});
+  const [rivalPick, setRivalPick] = useState<Record<string, string>>({});
+  const [seed, setSeed] = useState<Record<string, string>>({});
+  const rivals = c.dynasty?.rivals ?? [];
+  const branches = c.dynasty?.branches ?? [];
+  const eligible = c.relationships.filter((r) => {
+    if (r.type !== "child" || !r.alive || r.age < 21) return false;
+    const k = c.children?.find((x) => x.relId === r.id);
+    return k && !k.spouseName && !k.cutOff && !k.branchId;
+  });
+  const courting = c.relationships.filter((r) => {
+    const k = c.children?.find((x) => x.relId === r.id);
+    return k?.courtship;
+  });
+  const branchable = c.relationships.filter((r) => {
+    if (r.type !== "child" || !r.alive || r.age < 25) return false;
+    const k = c.children?.find((x) => x.relId === r.id);
+    return k && !k.branchId && c.will?.heirId !== r.id;
+  });
+
+  return (
+    <>
+      <Section
+        icon={Heart}
+        title="Introductions"
+        subtitle="Marriages arranged over lunch. They can always refuse — resentful children refuse loudest."
+      >
+        {courting.length > 0 && (
+          <div className="mb-3 space-y-1.5">
+            {courting.map((r) => (
+              <p
+                key={r.id}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground"
+              >
+                A courtship is in motion for{" "}
+                <span className="font-semibold text-foreground">{r.name}</span>.
+                The family waits, casually, by the phone.
+              </p>
+            ))}
+          </div>
+        )}
+        {eligible.length === 0 && courting.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No unmarried adult children (21+) at the table right now.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {eligible.map((r) => (
+              <div
+                key={r.id}
+                className="rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <p className="text-sm font-bold">
+                  {r.name}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    · age {r.age}
+                  </span>
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <select
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:outline-none"
+                    value={target[r.id] ?? "love"}
+                    onChange={(e) =>
+                      setTarget({ ...target, [r.id]: e.target.value })
+                    }
+                  >
+                    {MATCH_TARGETS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                  {(target[r.id] ?? "love") === "rival" && (
+                    <select
+                      className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:outline-none"
+                      value={rivalPick[r.id] ?? rivals[0]?.id ?? ""}
+                      onChange={(e) =>
+                        setRivalPick({ ...rivalPick, [r.id]: e.target.value })
+                      }
+                    >
+                      {rivals.map((rv) => (
+                        <option key={rv.id} value={rv.id}>
+                          {rv.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={prenup[r.id] ?? true}
+                      onChange={(e) =>
+                        setPrenup({ ...prenup, [r.id]: e.target.checked })
+                      }
+                    />
+                    Prenup
+                  </label>
+                  <button
+                    className={btn}
+                    disabled={c.money < 25000}
+                    onClick={() =>
+                      act((ch) =>
+                        arrangeIntroduction(
+                          ch,
+                          r.id,
+                          target[r.id] ?? "love",
+                          prenup[r.id] ?? true,
+                          rivalPick[r.id] ?? rivals[0]?.id,
+                          trySpendEnergy,
+                        ),
+                      )
+                    }
+                  >
+                    Arrange ($25k, 1 energy)
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section
+        icon={GitBranch}
+        title="Cadet Branches"
+        subtitle="A second child, seed money, and a hyphen of their own. Branches live in the background — loyal ones send money; bitter ones give interviews."
+      >
+        {branches.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {branches.map((b) => (
+              <div
+                key={b.id}
+                className="rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <p className="text-sm font-bold">{b.name}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Founded by {b.founder} (Gen {b.foundedGeneration}) · wealth{" "}
+                  {formatMoney(b.wealth)} · prestige {b.prestige} · loyalty{" "}
+                  {b.loyalty}/100
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {branchable.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Founding a branch needs a child of 25+ who isn't the named heir. (At
+            succession, any child taking 25%+ of a divided estate founds one
+            automatically.)
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {branchable.map((r) => (
+              <div
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 p-3"
+              >
+                <p className="text-sm font-bold">
+                  {r.name}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    · age {r.age}
+                  </span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    className={`${inputCls} w-32`}
+                    placeholder="1000000"
+                    inputMode="numeric"
+                    value={seed[r.id] ?? ""}
+                    onChange={(e) =>
+                      setSeed({
+                        ...seed,
+                        [r.id]: e.target.value.replace(/[^0-9]/g, ""),
+                      })
+                    }
+                  />
+                  <button
+                    className={btn}
+                    onClick={() =>
+                      act((ch) =>
+                        foundBranch(ch, r.id, Number(seed[r.id] || 0)),
+                      )
+                    }
+                  >
+                    Found Branch
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+    </>
+  );
+}
+
+// ---------- Heirlooms (rendered under Collections tab) ----------
+
+function HeirloomsSection({ c, act }: { c: Character; act: Act }) {
+  const [name, setName] = useState("");
+  const heirlooms = c.dynasty?.heirlooms ?? [];
+  const kids = c.relationships.filter((r) => r.type === "child" && r.alive);
+
+  return (
+    <Section
+      icon={KeyRound}
+      title="Heirlooms"
+      subtitle="Named objects, passed hand to hand. Assign them in the will — unassigned heirlooms breed a decade of grievance."
+    >
+      {heirlooms.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {heirlooms.map((h) => (
+            <div
+              key={h.id}
+              className="rounded-xl border border-white/10 bg-white/5 p-3"
+            >
+              <p className="text-sm font-bold">{h.name}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {h.description} · held by {h.holder} · significance{" "}
+                {h.significance}/100 · Gen {h.generationAcquired}
+              </p>
+              {h.holder === c.name && kids.length > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <select
+                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-foreground focus:outline-none"
+                    value={h.assignedTo ?? ""}
+                    onChange={(e) =>
+                      act((ch) =>
+                        assignHeirloom(ch, h.id, e.target.value || undefined),
+                      )
+                    }
+                  >
+                    <option value="">— unassigned —</option>
+                    {kids.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        to {k.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-muted-foreground">
+                    in the will
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          className={`${inputCls} flex-1`}
+          placeholder="Commission an heirloom (or leave blank for the jeweler's suggestion)…"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button
+          className={btn}
+          disabled={c.money < 150000}
+          onClick={() => {
+            act((ch) => commissionHeirloom(ch, name));
+            setName("");
+          }}
+        >
+          Commission ($150k)
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+// ---------- Seat customization (rendered under Estate tab) ----------
+
+function SeatCustomization({ c, act }: { c: Character; act: Act }) {
+  const [amount, setAmount] = useState("");
+  const [newName, setNewName] = useState("");
+  const seat = c.dynasty?.seat;
+  if (!seat) return null;
+  return (
+    <Section
+      icon={Castle}
+      title="The Seat Itself"
+      subtitle={`${seat.name} is currently worth ${formatMoney(seat.value)} — its value is whatever the family puts into it.`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className={`${inputCls} w-40`}
+          placeholder="500000"
+          inputMode="numeric"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))}
+        />
+        <button
+          className={btn}
+          disabled={
+            Number(amount || 0) < 100000 || c.money < Number(amount || 0)
+          }
+          onClick={() => {
+            act((ch) => renovateSeat(ch, Number(amount || 0)));
+            setAmount("");
+          }}
+        >
+          Renovate (adds 90% to value)
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          className={`${inputCls} w-56`}
+          placeholder={`Rename ${seat.name}…`}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+        />
+        <button
+          className={btnGhost}
+          disabled={!newName.trim()}
+          onClick={() => {
+            act((ch) => renameSeat(ch, newName));
+            setNewName("");
+          }}
+        >
+          Rename
+        </button>
+      </div>
     </Section>
   );
 }

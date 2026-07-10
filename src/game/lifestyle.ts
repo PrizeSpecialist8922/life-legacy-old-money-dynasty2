@@ -37,6 +37,46 @@ export function ensureLifestyle(c: Character): LifestyleState {
   return c.lifestyle;
 }
 
+// ---------- The Seat itself: worth what you put into it ----------
+
+/** Pour money into the Seat — its value is yours to build. */
+export function renovateSeat(
+  input: Character,
+  amount: number,
+): LifestyleResult {
+  const c = structuredClone(input);
+  const seat = c.dynasty?.seat;
+  if (!seat) return fail(input, "There is no Seat to renovate.");
+  if (amount < 100000)
+    return fail(
+      input,
+      "Renovations below $100,000 are called 'repairs' and happen anyway.",
+    );
+  if (c.money < amount)
+    return fail(input, `You don't have ${formatMoney(amount)}.`);
+  c.money -= amount;
+  seat.value += Math.round(amount * 0.9); // contractors keep 10%, as is tradition
+  seat.housePrestige = clamp(
+    seat.housePrestige + Math.min(6, Math.round(amount / 1000000) + 1),
+  );
+  const msg = `${formatMoney(amount)} into ${seat.name} — scaffolding for a year, and then the house simply looked like it had always been worth ${formatMoney(seat.value)}.`;
+  c.log.push({ age: c.age, text: msg, tone: "milestone" });
+  return { character: c, message: msg, tone: "milestone", ok: true };
+}
+
+export function renameSeat(input: Character, name: string): LifestyleResult {
+  const c = structuredClone(input);
+  const seat = c.dynasty?.seat;
+  if (!seat) return fail(input, "There is no Seat to rename.");
+  const clean = name.trim().slice(0, 40);
+  if (!clean) return fail(input, "A house needs a name.");
+  const old = seat.name;
+  seat.name = clean;
+  const msg = `${old} is now ${clean}. The stationery is reordered; the neighbors will use the old name for thirty years out of spite.`;
+  c.log.push({ age: c.age, text: msg, tone: "neutral" });
+  return { character: c, message: msg, tone: "neutral", ok: true };
+}
+
 // ---------- Estate upgrades ----------
 
 export interface EstateUpgradeDef {
