@@ -110,6 +110,7 @@ import {
   prestigeBreakdown,
 } from "../../game/prestige";
 import { descendantCount } from "../../game/familytree";
+import { switchToChild } from "../../game/generational";
 import type { DescendantRecord } from "../../game/types";
 import { FamilyView } from "./FamilyView";
 import { LegacyView } from "./LegacyView";
@@ -255,6 +256,7 @@ export function FamilyDynastyPage({
           <FamilyView c={c} act={act} />
           <MatchmakingSection c={c} act={act} />
           <ExtendedFamily c={c} />
+          <SuccessionSection c={c} act={act} />
         </div>
       )}
       {view === "estate" && <EstateView c={c} act={act} />}
@@ -1594,6 +1596,9 @@ function RivalsView({ c, act }: { c: Character; act: Act }) {
                       Win a board fight (influence +)
                     </option>
                     <option value="scandal">Kill the running story</option>
+                    <option value="leak">
+                      Leak it to the press (hurt them; 30% traced)
+                    </option>
                     <option value="marriage">
                       Secure a courtship with them
                     </option>
@@ -2144,6 +2149,73 @@ function SeatCustomization({ c, act }: { c: Character; act: Act }) {
         >
           Rename
         </button>
+      </div>
+    </Section>
+  );
+}
+
+// ---------- The Generation Switch: continue as your child, irreversibly ----------
+
+function SuccessionSection({ c, act }: { c: Character; act: Act }) {
+  const [confirming, setConfirming] = useState<string | undefined>(undefined);
+  const eligible = c.relationships.filter((r) => {
+    if (r.type !== "child" || !r.alive || r.age < 18) return false;
+    const k = c.children?.find((x) => x.relId === r.id);
+    return !k?.cutOff && !k?.branchId;
+  });
+  if (!eligible.length) return null;
+  return (
+    <Section
+      icon={Crown}
+      title="Step Back"
+      subtitle="Continue the game as one of your adult children — while you're still alive. You become their parent NPC, still holding the fortune until the day it passes. THERE IS NO WAY BACK."
+    >
+      <div className="grid gap-2 sm:grid-cols-2">
+        {eligible.map((r) => (
+          <div
+            key={r.id}
+            className="rounded-xl border border-white/10 bg-white/5 p-3"
+          >
+            <p className="text-sm font-bold">
+              {r.name}{" "}
+              <span className="font-normal text-muted-foreground">
+                — age {r.age}
+              </span>
+            </p>
+            {confirming === r.id ? (
+              <div className="mt-2 space-y-2">
+                <p className="text-[11px] text-red-300">
+                  Final answer? {c.name}'s life ends as a playable character.
+                  The liquid fortune stays with them as an NPC until they die.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    className={btnDanger}
+                    onClick={() => {
+                      setConfirming(undefined);
+                      act((ch) => switchToChild(ch, r.id));
+                    }}
+                  >
+                    Yes — become {r.name.split(" ")[0]}
+                  </button>
+                  <button
+                    className={btnGhost}
+                    onClick={() => setConfirming(undefined)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                className={`${btnGhost} mt-2`}
+                onClick={() => setConfirming(r.id)}
+              >
+                Continue as {r.name.split(" ")[0]}…
+              </button>
+            )}
+          </div>
+        ))}
       </div>
     </Section>
   );

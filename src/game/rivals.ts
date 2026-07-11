@@ -104,7 +104,8 @@ export function investigateRival(
   return { character: c, message: msg, tone: "milestone", ok: true };
 }
 
-export type LeverageUse = "scandal" | "board" | "relation" | "marriage";
+export type LeverageUse =
+  "scandal" | "board" | "relation" | "marriage" | "leak";
 
 export function useLeverage(
   input: Character,
@@ -144,6 +145,28 @@ export function useLeverage(
     rival.leverageOnYou = clamp(rival.leverageOnYou - 10);
     msg = `You showed ${rival.name} exactly what the Vault holds — then locked it again. Détente, on your terms.`;
     tone = "neutral";
+  } else if (use === "leak") {
+    if (!rival) return fail(input, "That family is beyond reach.");
+    // Feed the folder to a hungry editor. Their week gets very bad.
+    rival.prestige = clamp(rival.prestige - Math.round(item.potency / 2));
+    rival.wealth = Math.round(rival.wealth * (1 - item.potency / 400)); // lawyers, settlements, a resignation
+    rival.relation = clamp(rival.relation - 25, -100, 100);
+    if (randInt(1, 100) <= 30) {
+      // Traced. Editors protect sources badly and enemies investigate well.
+      rival.leverageOnYou = clamp(rival.leverageOnYou + 20);
+      d.press = d.press ?? { suppressed: 0, weathered: 0 };
+      d.press.active = d.press.active ?? {
+        id: `blowback-${item.id}`,
+        headline: `WHO FED THE ${item.rivalName.toUpperCase()} STORY? All Roads Lead to One Family`,
+        heat: 35,
+        yearsRunning: 0,
+      };
+      msg = `The ${item.rivalName} story ran above the fold — then the byline started asking who provided the folder. It traced back. Now there are two stories.`;
+      tone = "bad";
+    } else {
+      d.reputation = clamp(d.reputation + 1); // society pretends not to enjoy it
+      msg = `"${item.label}" ran on the front page with no fingerprints on it. ${item.rivalName} spent the season explaining; you spent it accepting sympathy.`;
+    }
   } else if (use === "marriage") {
     // Guarantee the next arranged courtship with this rival succeeds.
     const kid = c.children?.find(

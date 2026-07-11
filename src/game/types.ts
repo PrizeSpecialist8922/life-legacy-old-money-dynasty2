@@ -1152,6 +1152,12 @@ export interface Dynasty {
   heirlooms?: Heirloom[];
   office?: FamilyOfficeState;
   branches?: CadetBranch[];
+  parentEstate?: {
+    holder: string; // the living parent NPC still sitting on the fortune
+    partner?: string; // their spouse, also a parent NPC
+    value: number;
+    pct: number; // your share when it finally passes
+  };
 }
 
 export interface WillState {

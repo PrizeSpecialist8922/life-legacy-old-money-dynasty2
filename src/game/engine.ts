@@ -70,6 +70,7 @@ import { advanceCollections } from "./collections";
 import { advancePhilanthropy } from "./philanthropy";
 import { advanceRecords } from "./records";
 import { advanceFamilyTree } from "./familytree";
+import { advanceGenerational } from "./generational";
 import { advanceCouncil } from "./council";
 import { advanceRivals } from "./rivals";
 import { advanceBankOfficePress } from "./familybank";
@@ -925,6 +926,7 @@ export function ageUp(input: Character): AgeUpResult {
   advancePhilanthropy(c, c.log);
   advanceRecords(c, c.log);
   advanceFamilyTree(c, c.log);
+  advanceGenerational(c, c.log);
   advanceMatchmaking(c, c.log);
   advanceCouncil(c, c.log);
   advanceRivals(c, c.log);

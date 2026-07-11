@@ -147,6 +147,24 @@ if (haveLeverage) {
     "leverage consumed from vault",
     !c.dynasty!.vault!.some((v) => v.id === item.id),
   );
+  // Offensive leak: acquire another folder and feed it to the papers.
+  let second = false;
+  for (let i = 0; i < 25 && !second; i++) {
+    c.yearActionsUsed = 0;
+    c = investigateRival(c, rival.id, trySpendEnergy).character;
+    second = (c.dynasty?.vault?.length ?? 0) > 0;
+  }
+  if (second) {
+    const folder = c.dynasty!.vault![0];
+    const target = c.dynasty!.rivals!.find((r) => r.id === folder.rivalId)!;
+    const prestigeBefore = target.prestige;
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- game function, not a React hook
+    c = must(useLeverage(c, folder.id, "leak"), "leak a story about the rival");
+    const after = c.dynasty!.rivals!.find((r) => r.id === folder.rivalId)!;
+    check("leak damaged rival prestige", after.prestige < prestigeBefore);
+  } else {
+    check("second folder acquired for leak test", false);
+  }
 }
 
 // --- Family bank ---
@@ -306,3 +324,83 @@ check("old save shape survives 30 years", old.age >= 30);
 
 console.log(`\n${pass} passed, ${failCount} failed`);
 if (failCount > 0) process.exit(1);
+
+// --- The Generation Switch: continue as a child while the founder lives ---
+import("../src/game/generational").then(async () => {
+  const { switchToChild, advanceGenerational } =
+    await import("../src/game/generational");
+  let f = createCharacter({
+    name: "Founder Vane",
+    gender: "male",
+    country: "USA",
+  });
+  while (f.age < 50) f = ageUp(f).character;
+  f.money = 300_000_000;
+  const fd = ensureDynasty(f);
+  fd.reputation = 60;
+  f.relationships.push({
+    id: "child-Heir",
+    name: "Junior Vane",
+    type: "child",
+    relationship: 85,
+    age: 25,
+    alive: true,
+  });
+  ensureChildren(f);
+  const minor = { ...f.relationships[f.relationships.length - 1] };
+  f.relationships.push({
+    ...minor,
+    id: "child-Baby",
+    name: "Baby Vane",
+    age: 8,
+  });
+  ensureChildren(f);
+  check("switch rejected for a minor", !switchToChild(f, "child-Baby").ok);
+  const sw = switchToChild(f, "child-Heir");
+  check("switch succeeds for adult child", sw.ok, `— ${sw.message}`);
+  let h = sw.character;
+  check("now playing the child", h.name === "Junior Vane" && h.age === 25);
+  check(
+    "founder became parent NPC",
+    h.relationships.some(
+      (r) =>
+        (r.type === "father" || r.type === "mother") &&
+        r.name === "Founder Vane" &&
+        r.alive,
+    ),
+  );
+  check(
+    "sibling carried over",
+    h.relationships.some((r) => r.type === "sibling"),
+  );
+  check(
+    "dynasty carried, generation advanced",
+    (h.dynasty?.generation ?? 0) === fd.generation + 1,
+  );
+  check(
+    "parent estate parked",
+    (h.dynasty?.parentEstate?.value ?? 0) > 100_000_000,
+  );
+  check("child starts on their own money", h.money < 1_000_000);
+  // Age until the founder dies and the estate passes.
+  let inherited = false;
+  for (let i = 0; i < 60 && !inherited; i++) {
+    h.yearActionsUsed = 0;
+    const saved = h.age;
+    h = ageUp(h).character;
+    h.age = saved;
+    h.stats.health = 90;
+    h.alive = true;
+    const parent = h.relationships.find((r) => r.name === "Founder Vane");
+    if (parent) parent.age += 1;
+    advanceGenerational(h, h.log);
+    inherited = !h.dynasty?.parentEstate && h.money > 10_000_000;
+  }
+  check(
+    "estate eventually passed to the new life",
+    inherited,
+    `money=${h.money}`,
+  );
+  console.log(`\n[switch] ${pass} passed, ${failCount} failed`);
+  if (failCount > 0) process.exit(1);
+});
